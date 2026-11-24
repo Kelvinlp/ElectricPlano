@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Plano Eléctrico — Diseñador de planos</title>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;800&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<style>
+:root{--ink:#1b2233;--mut:#6b7488;--line:#dde1ea;--bg:#eceff4;--pan:#fff;--ac:#2b59ff;--acs:#e8eeff;font-family:Manrope,system-ui,sans-serif}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;color:var(--ink);background:var(--bg);font-size:13px}
+body{display:grid;grid-template-rows:auto auto 1fr;height:100vh}
+button,input,select{font:inherit;color:inherit}
+button{border:1px solid var(--line);background:#fff;border-radius:7px;padding:6px 11px;cursor:pointer}
+button:hover{background:#f4f6fa}
+button:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visible{outline:2px solid var(--ac);outline-offset:1px}
+button.on{background:var(--ac);border-color:var(--ac);color:#fff}
+button.pri{background:var(--ink);color:#fff;border-color:var(--ink)}
+button.dng{color:#c4262e}
+header{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:8px 14px;background:var(--pan);border-bottom:1px solid var(--line)}
+header h1{font-size:15px;font-weight:800;margin:0 auto 0 0;letter-spacing:-.01em}
+.bar{display:flex;align-items:center;gap:6px;padding:7px 14px;background:var(--pan);border-bottom:1px solid var(--line);flex-wrap:wrap}
+.bar .sep{width:1px;height:22px;background:var(--line);margin:0 4px}
+#hint{margin-left:auto;color:var(--mut)}
+main{display:grid;grid-template-columns:240px 1fr 250px;min-height:0}
+aside{background:var(--pan);overflow:auto;padding:10px}
+#lib{border-right:1px solid var(--line)}
+#props{border-left:1px solid var(--line)}
+details{border-bottom:1px solid var(--line);padding:6px 0}
+summary{cursor:pointer;font-weight:800;padding:4px 2px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;padding:6px 0}
+.item{border:1px solid var(--line);border-radius:8px;padding:6px 4px;text-align:center;cursor:grab;font-size:11.5px;line-height:1.25;background:#fafbfd;user-select:none}
+.item:hover{border-color:var(--ac);background:var(--acs)}
+.item canvas{display:block;margin:0 auto 3px}
+#wrap{overflow:auto;position:relative;background:#dfe3ea}
+#cv{display:block;background:#fff;box-shadow:0 0 0 1px var(--line);cursor:crosshair}
+label.f{display:block;margin:10px 0 3px;font-weight:600}
+input[type=text],input[type=number],select{width:100%;padding:6px 8px;border:1px solid var(--line);border-radius:7px;background:#fff}
+input[type=range]{width:100%}
+.chips{display:flex;gap:6px;flex-wrap:wrap;padding:6px 0}
+.chip{display:flex;align-items:center;gap:5px;padding:4px 8px}
+.chip i{width:12px;height:12px;border-radius:50%;display:inline-block}
+.row{display:flex;gap:6px;margin-top:12px}
+.row button{flex:1}
+.mut{color:var(--mut);line-height:1.5}
+@media(max-width:900px){main{grid-template-columns:190px 1fr}#props{display:none}}
+</style>
+</head>
+<body>
+<header>
+  <h1>Plano Eléctrico</h1>
+  <button id="bNew">Nuevo</button>
+  <button id="bOpen">Abrir proyecto</button>
+  <button id="bSave">Guardar proyecto</button>
+  <button id="bImg">Importar imagen / plano</button>
+  <input type="file" id="fImg" accept="image/*" hidden>
+  <input type="file" id="fPrj" accept=".json,application/json" hidden>
+  <button id="bUndo">Deshacer</button>
+  <button id="bClear" class="dng">Borrar todo</button>
+  <button id="bPng" class="pri">Exportar PNG</button>
+  <button id="bJpg" class="pri">Exportar JPG</button>
+  <button id="bPdf" class="pri">Exportar PDF</button>
+</header>
+<div class="bar" id="tools">
+  <button data-t="select">Seleccionar</button>
+  <button data-t="move">Mover</button>
+  <button data-t="rotate">Rotar</button>
+  <button data-t="resize">Redimensionar</button>
+  <button data-t="delete">Eliminar</button>
+  <span class="sep"></span>
+  <button data-t="wall">Pared</button>
+  <button data-t="door">Puerta</button>
+  <button data-t="window">Ventana</button>
+  <button data-t="wire">Cableado</button>
+  <span id="hint"></span>
+</div>
+<main>
+  <aside id="lib">
+    <div id="cats"></div>
+    <details open><summary>Cableado</summary>
+      <div class="mut">Color del cable nuevo:</div>
+      <div class="chips" id="wchips"></div>
+      <label class="f">Trazo</label>
+      <select id="wstyle"><option value="recta">Recto</option><option value="curva">Curvo</option></select>
+      <label class="f" for="wn">Conductores</label>
+      <select id="wn"><option value="1">Sencillo (color elegido)</option><option value="2">Doble (fase + neutro)</option><option value="3">Triple (fase + neutro + tierra)</option></select>
+      <label class="f" for="wlab">Nombre o calibre</label>
+      <input type="text" id="wlab" list="gauges" placeholder="Ej. #12 AWG">
+      <datalist id="gauges"><option value="#14 AWG"><option value="#12 AWG"><option value="#10 AWG"><option value="#8 AWG"><option value="#6 AWG"><option value="#4 AWG"><option value="2x#12 AWG"><option value="3x#12 AWG"></datalist>
+      <div class="row"><button data-t="wire" class="wireBtn">Dibujar cable</button></div>
+      <p class="mut">Con la herramienta activa, haz clic en un componente y luego en otro para conectarlos.</p>
+    </details>
+  </aside>
+  <div id="wrap"><canvas id="cv"></canvas></div>
+  <aside id="props">
+    <div id="pNone" class="mut">Selecciona un elemento del plano para editar su etiqueta, rotación y tamaño.<br><br>Arrastra símbolos desde la librería hasta el lienzo, o haz clic en uno para colocarlo en el centro.</div>
+    <div id="pObj" hidden>
+      <strong id="pName"></strong>
+      <label class="f" for="iLab">Etiqueta</label><input type="text" id="iLab" placeholder="Ej. Breaker 20A">
+      <label class="f" for="iRot">Rotación (°)</label><input type="number" id="iRot" step="15">
+      <label class="f" for="iSc">Escala</label><input type="range" id="iSc" min="0.4" max="3" step="0.1">
+      <div id="rLen"><label class="f" for="iLen">Longitud (px)</label><input type="number" id="iLen" min="20" step="10"></div>
+      <div id="rImg" hidden><label class="f" for="iOp">Opacidad</label><input type="range" id="iOp" min="0.1" max="1" step="0.05">
+        <label class="f" style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="iLock"> Bloquear imagen</label>
+        <div class="mut">Una imagen bloqueada no estorba al dibujar encima. Para volver a seleccionarla, usa Alt + clic.</div></div>
+      <div class="row"><button id="bDup">Duplicar</button><button id="bDel" class="dng">Eliminar</button></div>
+    </div>
+    <div id="pWire" hidden>
+      <strong>Cable</strong>
+      <label class="f">Tipo / color</label><div class="chips" id="pchips"></div>
+      <label class="f" for="wsSt">Trazo</label>
+      <select id="wsSt"><option value="recta">Recto</option><option value="curva">Curvo</option></select>
+      <label class="f" for="wsN">Conductores</label>
+      <select id="wsN"><option value="1">Sencillo (color elegido)</option><option value="2">Doble (fase + neutro)</option><option value="3">Triple (fase + neutro + tierra)</option></select>
+      <label class="f" for="wsLab">Nombre o calibre</label>
+      <input type="text" id="wsLab" list="gauges" placeholder="Ej. #12 AWG">
+      <div class="row"><button id="bWDel" class="dng">Eliminar cable</button></div>
+    </div>
+  </aside>
+</main>
+<script>
+const $=s=>document.querySelector(s), C=$('#cv'), X=C.getContext('2d');
+const W=2000,H=1300,G=20,INK='#1b2233',AC='#2b59ff'; C.width=W; C.height=H;
+const COL={fase:['Fase','#e5484d'],neutro:['Neutro','#3b82f6'],tierra:['Tierra','#2fa35b'],retorno:['Retorno','#e8a500']};
+const LIB={
+ wall:{n:'Pared',c:0,lin:1,len:160},door:{n:'Puerta',c:0,lin:1,len:40},window:{n:'Ventana',c:0,lin:1,len:60},
+ panel:{n:'Tablero de breakers',c:1,w:36,h:48,l:'Tablero'},
+ split:{n:'A/C Split',c:2,w:64,h:22,l:'A/C'},central:{n:'A/C Central',c:2,w:44,h:44,l:'A/C Central'},fan:{n:'Abanico de techo',c:2,w:40,h:40},
+ bulb:{n:'Luminaria de techo',c:3,w:30,h:30},recess:{n:'Ojo de buey',c:3,w:26,h:26},
+ out1:{n:'Toma simple',c:4,w:28,h:28,l:'110V'},out2:{n:'Toma doble',c:4,w:30,h:28,l:'110V'},
+ sw1:{n:'Interruptor sencillo',c:5,w:28,h:28},sw3:{n:'Interruptor conmutable (3-way)',c:5,w:30,h:28}};
+Object.assign(LIB,{img:{n:'Imagen / plano',c:-1,w:100,h:100},tbox:{n:'Cuadro de área',c:6,txt:1,w:60,h:36,l:'Sala / Comedor'},tbubble:{n:'Diálogo / nota',c:6,txt:1,w:60,h:36,l:'Nota'},ttext:{n:'Texto libre',c:6,txt:1,w:60,h:36,l:'Cocina'}});
+[10,15,20,30,40].forEach(a=>['s','d'].forEach(p=>LIB['b'+a+p]={n:'Breaker '+a+'A '+(p=='s'?'sencillo':'doble'),c:1,w:p=='s'?26:46,h:34,amp:a,pl:p}));
+const CATS=['Estructura','Cuadro eléctrico','Climatización','Iluminación','Tomacorrientes','Interruptores','Etiquetas y notas'];
+const HINTS={select:'Clic para seleccionar; arrastra para mover',move:'Arrastra un objeto para moverlo',rotate:'Arrastra un objeto para rotarlo',resize:'Arrastra un objeto para cambiar su tamaño',delete:'Clic en un objeto o cable para eliminarlo',wall:'Arrastra para dibujar una pared',door:'Arrastra o haz clic para colocar una puerta',window:'Arrastra o haz clic para colocar una ventana',wire:'Clic en un componente y luego en otro para conectarlos'};
+var SRC={},IMG={},ALT=false;let objs=[],wires=[],nid=1,tool='select',sel=null,selW=null,wCol='fase',wSty='recta',wFrom=null,drag=null,mouse={x:0,y:0},hist=[];
+
+/* ---------- símbolos ---------- */
+function sym(c,t,L,o){
+ c.lineWidth=2;c.strokeStyle=INK;c.fillStyle='#fff';c.lineCap='round';c.setLineDash([]);
+ const ln=(a,b,d,e)=>{c.beginPath();c.moveTo(a,b);c.lineTo(d,e);c.stroke()}, ci=(r,f)=>{c.beginPath();c.arc(0,0,r,0,7);f&&c.fill();c.stroke()};
+ switch(t){
+ case'wall':c.fillStyle=INK;c.fillRect(-L/2,-4,L,8);break;
+ case'door':c.fillRect(-L/2,-5,L,10);c.lineWidth=1.5;ln(-L/2,-5,-L/2,5);ln(L/2,-5,L/2,5);c.lineWidth=2;ln(-L/2,0,-L/2,-L);
+  c.setLineDash([3,3]);c.lineWidth=1.2;c.beginPath();c.arc(-L/2,0,L,-Math.PI/2,0);c.stroke();break;
+ case'window':c.fillStyle='#cfe0ff';c.fillRect(-L/2,-5,L,10);c.strokeRect(-L/2,-5,L,10);c.lineWidth=1.2;ln(-L/2,0,L/2,0);break;
+ case'panel':c.fillRect(-18,-24,36,48);c.strokeRect(-18,-24,36,48);c.fillStyle=INK;
+  for(let i=0;i<4;i++)for(let j=0;j<2;j++)c.fillRect(-12+j*14,-18+i*10,10,6);break;
+ case'split':c.beginPath();c.roundRect(-32,-11,64,22,5);c.fill();c.stroke();c.lineWidth=1.4;[3,7].forEach(y=>ln(-24,y,24,y));
+  c.fillStyle=INK;c.fillRect(-26,-7,6,2);break;
+ case'central':c.fillRect(-22,-22,44,44);c.strokeRect(-22,-22,44,44);ci(13);c.lineWidth=1.4;ln(-9,-9,9,9);ln(9,-9,-9,9);break;
+ case'fan':ci(19);for(let i=0;i<3;i++){c.save();c.rotate(i*2.094);c.beginPath();c.ellipse(0,-10,4.5,9,0,0,7);c.fillStyle='#e4e8f1';c.fill();c.lineWidth=1.4;c.stroke();c.restore()}
+  c.beginPath();c.arc(0,0,3.5,0,7);c.fillStyle=INK;c.fill();break;
+ case'bulb':ci(12,1);ln(-8.5,-8.5,8.5,8.5);ln(8.5,-8.5,-8.5,8.5);break;
+ case'recess':ci(12,1);c.beginPath();c.arc(0,0,5,0,7);c.fillStyle=INK;c.fill();break;
+ case'out1':ci(11,1);ln(0,-11,0,11);break;
+ case'out2':ci(11,1);ln(-4,-10.5,-4,10.5);ln(4,-10.5,4,10.5);break;
+ case'sw1':ci(7,1);ln(5,-5,13,-13);ln(10,-13,16,-10);break;
+ case'sw3':ci(7,1);ln(5,-5,13,-13);ln(-5,5,-13,13);ln(10,-13,16,-10);break;
+ case'tbox':case'tbubble':case'ttext':{const s=o?o.label:LIB[t].l;c.font='600 14px Manrope,sans-serif';const tw=Math.max(60,c.measureText(s||'Área').width+24);
+  if(t!='ttext'){c.fillStyle=t=='tbox'?'#eef3ff':'#fffbe6';c.beginPath();c.roundRect(-tw/2,-18,tw,36,t=='tbox'?5:12);c.fill();c.stroke();
+   if(t=='tbubble'){c.beginPath();c.moveTo(-18,16);c.lineTo(-24,29);c.lineTo(-6,16);c.fill();c.beginPath();c.moveTo(-17,18);c.lineTo(-24,29);c.lineTo(-7,18);c.stroke()}}
+  c.fillStyle=INK;c.textAlign='center';c.textBaseline='middle';c.fillText(s||'Área',0,0);c.textBaseline='alphabetic';break}
+ case'img':{const im=IMG[o.sid];if(im&&im.complete&&im.naturalWidth){c.globalAlpha=o.op??1;c.drawImage(im,-o.iw/2,-o.ih/2,o.iw,o.ih);c.globalAlpha=1}
+  c.strokeStyle='#cbd2e0';c.lineWidth=1;c.strokeRect(-o.iw/2,-o.ih/2,o.iw,o.ih);break}
+ default:{const d=LIB[t];if(!d||!d.amp)break;const w=d.w,h=d.h,n=d.pl=='d'?2:1;
+  c.beginPath();c.roundRect(-w/2,-h/2,w,h,3);c.fill();c.stroke();c.fillStyle=INK;
+  for(let i=0;i<n;i++){const cx=n==1?0:(i?10:-10);c.fillRect(cx-4,-h/2+4,8,10)}
+  if(n==2){c.lineWidth=1.5;ln(-6,-h/2+9,6,-h/2+9)}
+  c.font='700 10px Manrope,sans-serif';c.textAlign='center';c.textBaseline='middle';c.fillText(d.amp+'A',0,h/2-9);c.textBaseline='alphabetic'}
+ }
+}
+const sc=o=>LIB[o.t].lin?1:o.s;
+function bnd(o){const d=LIB[o.t],L=o.len;
+ if(o.t=='wall')return[-L/2,-5,L/2,5];if(o.t=='door')return[-L/2,-L,L/2,6];if(o.t=='window')return[-L/2,-6,L/2,6];
+ if(o.t=='img')return[-o.iw/2,-o.ih/2,o.iw/2,o.ih/2];
+ if(d.txt){X.font='600 14px Manrope,sans-serif';const w=Math.max(60,X.measureText(o.label||'Área').width+24);return[-w/2,-18,w/2,o.t=='tbubble'?30:18]}
+ return[-d.w/2,-d.h/2,d.w/2,d.h/2]}
+function toW(o,x,y){const a=o.r*Math.PI/180,c=Math.cos(a),s=Math.sin(a);return{x:o.x+x*c-y*s,y:o.y+x*s+y*c}}
+function toL(o,p){const a=-o.r*Math.PI/180,c=Math.cos(a),s=Math.sin(a),dx=p.x-o.x,dy=p.y-o.y;return{x:dx*c-dy*s,y:dx*s+dy*c}}
+const hdl=o=>{const b=bnd(o),k=sc(o);return LIB[o.t].lin?[o.len/2,0]:[b[2]*k,b[3]*k]};
+const layer=o=>o.t=='img'?-1:o.t=='wall'?0:(o.t=='door'||o.t=='window')?1:2;
+const ordered=()=>[...objs].sort((a,b)=>layer(a)-layer(b));
+
+/* ---------- dibujo ---------- */
+function wirePath(c,w){const a=objs.find(o=>o.id==w.a),b=objs.find(o=>o.id==w.b);if(!a||!b)return false;
+ c.beginPath();c.moveTo(a.x,a.y);
+ if(w.st=='curva'){const mx=(a.x+b.x)/2,my=(a.y+b.y)/2,dx=b.x-a.x,dy=b.y-a.y;c.quadraticCurveTo(mx-dy*.25,my+dx*.25,b.x,b.y)}else c.lineTo(b.x,b.y);return true}
+function wirePts(w){const a=objs.find(o=>o.id==w.a),b=objs.find(o=>o.id==w.b),p=[];if(!a||!b)return p;
+ for(let i=0;i<=24;i++){const t=i/24;if(w.st=='curva'){const mx=(a.x+b.x)/2-(b.y-a.y)*.25,my=(a.y+b.y)/2+(b.x-a.x)*.25;
+  p.push({x:(1-t)*(1-t)*a.x+2*(1-t)*t*mx+t*t*b.x,y:(1-t)*(1-t)*a.y+2*(1-t)*t*my+t*t*b.y})}else p.push({x:a.x+(b.x-a.x)*t,y:a.y+(b.y-a.y)*t})}return p}
+const CCOL=w=>(w.n||1)==1?[COL[w.col][1]]:[COL.fase[1],COL.neutro[1],COL.tierra[1]].slice(0,w.n);
+function drawWire(w,exp){const p=wirePts(w);if(!p.length)return;const n=w.n||1;
+ const pl=off=>{X.beginPath();p.forEach((q,i)=>{const a=p[Math.max(0,i-1)],b=p[Math.min(p.length-1,i+1)],dx=b.x-a.x,dy=b.y-a.y,l=Math.hypot(dx,dy)||1,x=q.x-dy/l*off,y=q.y+dx/l*off;i?X.lineTo(x,y):X.moveTo(x,y)})};
+ X.setLineDash([]);X.lineCap='round';X.lineJoin='round';
+ if(!exp&&w==selW){pl(0);X.strokeStyle='rgba(43,89,255,.25)';X.lineWidth=7+n*4;X.stroke()}
+ CCOL(w).forEach((col,i)=>{pl((i-(n-1)/2)*4.5);X.strokeStyle=col;X.lineWidth=2.5;X.stroke()});
+ if(w.label){const m=p[12],y=m.y-10-n*3;X.font='600 11px Manrope,sans-serif';X.textAlign='center';X.lineWidth=4;X.strokeStyle='#fff';X.strokeText(w.label,m.x,y);X.fillStyle=INK;X.fillText(w.label,m.x,y)}}
+function render(exp){
+ X.clearRect(0,0,W,H);X.fillStyle='#fff';X.fillRect(0,0,W,H);
+ if(!exp){X.lineWidth=1;for(let x=0;x<=W;x+=G){X.strokeStyle=x%100?'#eceff4':'#d3d9e4';X.beginPath();X.moveTo(x+.5,0);X.lineTo(x+.5,H);X.stroke()}
+  for(let y=0;y<=H;y+=G){X.strokeStyle=y%100?'#eceff4':'#d3d9e4';X.beginPath();X.moveTo(0,y+.5);X.lineTo(W,y+.5);X.stroke()}}
+ const ord=ordered(),draw=o=>{X.save();X.translate(o.x,o.y);X.rotate(o.r*Math.PI/180);if(!LIB[o.t].lin)X.scale(o.s,o.s);sym(X,o.t,o.len,o);X.restore();
+  if(o.label&&!LIB[o.t].txt){const b=bnd(o),y=LIB[o.t].lin?o.y+(o.t=='door'?22:-14):o.y+Math.max(b[2],b[3])*o.s+14;
+   X.font='600 12px Manrope,sans-serif';X.textAlign='center';X.lineWidth=4;X.strokeStyle='#fff';X.strokeText(o.label,o.x,y);X.fillStyle=INK;X.fillText(o.label,o.x,y)}};
+ ord.filter(o=>layer(o)<2).forEach(draw);
+ wires.forEach(w=>drawWire(w,exp));
+ ord.filter(o=>layer(o)==2).forEach(draw);
+ if(exp)return;
+ if(sel){const b=bnd(sel),k=sc(sel);X.save();X.translate(sel.x,sel.y);X.rotate(sel.r*Math.PI/180);
+  X.strokeStyle=AC;X.lineWidth=1.5;X.setLineDash([5,4]);X.strokeRect(b[0]*k-4,b[1]*k-4,(b[2]-b[0])*k+8,(b[3]-b[1])*k+8);X.setLineDash([]);
+  const h=hdl(sel),ry=b[1]*k-26;X.beginPath();X.moveTo(0,b[1]*k-4);X.lineTo(0,ry);X.stroke();
+  X.fillStyle='#fff';X.beginPath();X.arc(0,ry,6,0,7);X.fill();X.stroke();
+  X.fillRect(h[0]-5,h[1]-5,10,10);X.strokeRect(h[0]-5,h[1]-5,10,10);X.restore()}
+ if(wFrom){X.strokeStyle=AC;X.lineWidth=3;X.beginPath();X.arc(wFrom.x,wFrom.y,22,0,7);X.stroke();
+  X.setLineDash([6,5]);X.strokeStyle=COL[wCol][1];X.beginPath();X.moveTo(wFrom.x,wFrom.y);X.lineTo(mouse.x,mouse.y);X.stroke();X.setLineDash([])}
+ if(drag&&drag.m=='draw'){const s=segOf(drag);X.strokeStyle=AC;X.lineWidth=tool=='wall'?8:4;X.globalAlpha=.55;X.beginPath();X.moveTo(drag.x0,drag.y0);X.lineTo(s.x1,s.y1);X.stroke();X.globalAlpha=1}
+}
+
+/* ---------- utilidades ---------- */
+const snap=(v,g=10)=>Math.round(v/g)*g;
+function pos(e){const r=C.getBoundingClientRect();return{x:(e.clientX-r.left)*W/r.width,y:(e.clientY-r.top)*H/r.height}}
+function hitObj(p){const o=ordered().reverse().find(o=>{if(o.lock&&!ALT)return false;const q=toL(o,p),k=sc(o),b=bnd(o);return q.x>=b[0]*k-5&&q.x<=b[2]*k+5&&q.y>=b[1]*k-5&&q.y<=b[3]*k+5});return o}
+function hitWire(p){return[...wires].reverse().find(w=>{const pts=wirePts(w);for(let i=1;i<pts.length;i++){const a=pts[i-1],b=pts[i],dx=b.x-a.x,dy=b.y-a.y,l=dx*dx+dy*dy||1,t=Math.max(0,Math.min(1,((p.x-a.x)*dx+(p.y-a.y)*dy)/l));
+ if(Math.hypot(p.x-a.x-t*dx,p.y-a.y-t*dy)<7+(w.n||1)*2)return true}return false})}
+function hitHandle(p){if(!sel)return null;const b=bnd(sel),k=sc(sel),r=toW(sel,0,b[1]*k-26),h=hdl(sel),q=toW(sel,h[0],h[1]);
+ if(Math.hypot(p.x-r.x,p.y-r.y)<10)return'rot';if(Math.hypot(p.x-q.x,p.y-q.y)<10)return'rs';return null}
+function segOf(d){let dx=mouse.x-d.x0,dy=mouse.y-d.y0,L=Math.hypot(dx,dy),a=Math.round(Math.atan2(dy,dx)/(Math.PI/12))*(Math.PI/12);
+ L=snap(L);return{L,a,x1:d.x0+Math.cos(a)*L,y1:d.y0+Math.sin(a)*L}}
+function add(t,x,y,extra){const d=LIB[t],o={id:nid++,t,x,y,r:0,s:1,len:d.len||0,label:d.l||''};Object.assign(o,extra);objs.push(o);return o}
+function push(){hist.push(JSON.stringify({objs,wires,nid}));if(hist.length>60)hist.shift()}
+function undo(){if(!hist.length)return;const s=JSON.parse(hist.pop());objs=s.objs;wires=s.wires;nid=s.nid;sel=selW=null;wFrom=null;sync();render()}
+function remove(o){objs=objs.filter(x=>x!=o);wires=wires.filter(w=>w.a!=o.id&&w.b!=o.id);if(sel==o)sel=null}
+
+/* ---------- ratón ---------- */
+C.addEventListener('mousedown',e=>{const p=pos(e);mouse=p;ALT=e.altKey;
+ if(tool=='wall'||tool=='door'||tool=='window'){drag={m:'draw',x0:snap(p.x),y0:snap(p.y)};mouse={x:snap(p.x),y:snap(p.y)};return}
+ if(tool=='wire'){const o=hitObj(p);if(!o){wFrom=null}else if(!wFrom||wFrom==o){wFrom=o}else{push();selW={a:wFrom.id,b:o.id,col:wCol,st:wSty,n:+$('#wn').value,label:$('#wlab').value};wires.push(selW);wFrom=null;sel=null;sync()}render();return}
+ if(tool=='delete'){const o=hitObj(p);if(o){push();remove(o)}else{const w=hitWire(p);if(w){push();wires=wires.filter(x=>x!=w)}}sel=selW=null;sync();render();return}
+ const h=['select','rotate','resize'].includes(tool)?hitHandle(p):null;let o=h?sel:hitObj(p);
+ if(!o){sel=null;selW=hitWire(p)||null;sync();render();return}
+ sel=o;selW=null;sync();push();
+ const m=h?h:tool=='rotate'?'rot':tool=='resize'?'rs':'mv';
+ drag={m,o,ox:p.x-o.x,oy:p.y-o.y,a0:Math.atan2(p.y-o.y,p.x-o.x),r0:o.r,d0:Math.max(10,Math.hypot(p.x-o.x,p.y-o.y)),s0:o.s};render()});
+window.addEventListener('mousemove',e=>{const p=pos(e);
+ if(drag&&drag.m=='draw')mouse={x:snap(p.x),y:snap(p.y)};else mouse=p;
+ if(drag&&drag.o){const o=drag.o;
+  if(drag.m=='mv'){o.x=snap(p.x-drag.ox);o.y=snap(p.y-drag.oy)}
+  else if(drag.m=='rot'){o.r=Math.round((drag.r0+(Math.atan2(p.y-o.y,p.x-o.x)-drag.a0)*180/Math.PI)/5)*5;o.r=((o.r%360)+360)%360}
+  else if(drag.m=='rs'){if(LIB[o.t].lin){const a=o.r*Math.PI/180;o.len=Math.max(20,snap(2*Math.abs((p.x-o.x)*Math.cos(a)+(p.y-o.y)*Math.sin(a))))}
+   else{const im=o.t=='img',q=im?100:10;o.s=Math.max(im?.05:.4,Math.min(im?6:3,Math.round(drag.s0*Math.hypot(p.x-o.x,p.y-o.y)/drag.d0*q)/q))}}
+  sync()}
+ if(drag||wFrom)render()});
+window.addEventListener('mouseup',()=>{if(!drag)return;
+ if(drag.m=='draw'){const s=segOf(drag),d=LIB[tool];push();
+  if(s.L>=20){const o=add(tool,(drag.x0+s.x1)/2,(drag.y0+s.y1)/2,{r:s.a*180/Math.PI,len:s.L});sel=o}
+  else if(tool!='wall'){sel=add(tool,drag.x0,drag.y0)}else hist.pop();sync()}
+ drag=null;render()});
+
+/* ---------- panel de propiedades ---------- */
+function sync(){const o=sel;$('#pObj').hidden=!o;$('#pWire').hidden=!selW;$('#pNone').hidden=!!(o||selW);
+ if(o){$('#pName').textContent=LIB[o.t].n;if(document.activeElement!=$('#iLab'))$('#iLab').value=o.label;
+  if(document.activeElement!=$('#iRot'))$('#iRot').value=Math.round(o.r);{const im=o.t=='img',s=$('#iSc');s.min=im?.05:.4;s.max=im?5:3;s.step=im?.05:.1;s.value=o.s}$('#iSc').disabled=!!LIB[o.t].lin;$('#rImg').hidden=o.t!='img';$('#iOp').value=o.op??1;$('#iLock').checked=!!o.lock;
+  $('#rLen').hidden=!LIB[o.t].lin;if(document.activeElement!=$('#iLen'))$('#iLen').value=o.len}
+ if(selW){$('#wsSt').value=selW.st;$('#wsN').value=selW.n||1;if(document.activeElement!=$('#wsLab'))$('#wsLab').value=selW.label||'';document.querySelectorAll('#pchips button').forEach(b=>b.classList.toggle('on',b.dataset.c==selW.col))}}
+$('#iLab').oninput=e=>{if(sel){sel.label=e.target.value;render()}};
+$('#iLab').onchange=()=>push();
+$('#iRot').oninput=e=>{if(sel){sel.r=((+e.target.value||0)%360+360)%360;render()}};
+$('#iSc').oninput=e=>{if(sel){sel.s=+e.target.value;render()}};
+$('#iLen').oninput=e=>{if(sel&&+e.target.value>=20){sel.len=+e.target.value;render()}};
+['#iRot','#iSc','#iLen'].forEach(s=>$(s).addEventListener('pointerdown',push));
+$('#bDel').onclick=()=>{if(sel){push();remove(sel);sync();render()}};
+$('#bDup').onclick=()=>{if(sel){push();sel=add(sel.t,sel.x+30,sel.y+30,{r:sel.r,s:sel.s,len:sel.len,label:sel.label});sync();render()}};
+$('#bWDel').onclick=()=>{if(selW){push();wires=wires.filter(w=>w!=selW);selW=null;sync();render()}};
+$('#wsSt').onchange=e=>{if(selW){selW.st=e.target.value;render()}};
+$('#wstyle').onchange=e=>wSty=e.target.value;
+$('#wsN').onchange=e=>{if(selW){push();selW.n=+e.target.value;render()}};
+$('#wsLab').oninput=e=>{if(selW){selW.label=e.target.value;render()}};
+$('#wsLab').addEventListener('focus',push);
+
+/* ---------- barra y librería ---------- */
+function setTool(t){tool=t;wFrom=null;drag=null;C.style.cursor=t=='select'||t=='move'?'default':t=='delete'?'not-allowed':'crosshair';
+ document.querySelectorAll('[data-t]').forEach(b=>b.classList.toggle('on',b.dataset.t==t&&!b.classList.contains('wireBtn')||b.classList.contains('wireBtn')&&t=='wire'));
+ $('#hint').textContent=HINTS[t];render()}
+document.querySelectorAll('[data-t]').forEach(b=>b.onclick=()=>setTool(b.dataset.t));
+function chips(el,fn){el.innerHTML='';Object.entries(COL).forEach(([k,[n,c]])=>{const b=document.createElement('button');b.className='chip';b.dataset.c=k;b.innerHTML='<i style="background:'+c+'"></i>'+n;b.onclick=()=>fn(k);el.appendChild(b)})}
+chips($('#wchips'),k=>{wCol=k;document.querySelectorAll('#wchips button').forEach(b=>b.classList.toggle('on',b.dataset.c==k));if(selW){selW.col=k;sync()}render()});
+chips($('#pchips'),k=>{if(selW){push();selW.col=k;sync();render()}});
+document.querySelector('#wchips button').classList.add('on');
+CATS.forEach((n,ci)=>{const d=document.createElement('details');d.open=true;d.innerHTML='<summary>'+n+'</summary><div class="grid"></div>';
+ Object.entries(LIB).filter(([,v])=>v.c==ci).forEach(([t,v])=>{const it=document.createElement('div'),cv=document.createElement('canvas');cv.width=cv.height=44;
+  const c=cv.getContext('2d'),lin=v.lin;c.translate(22,lin&&t=='door'?30:22);if(lin)sym(c,t,t=='wall'?38:t=='door'?26:34);else{const k=Math.min(1,36/Math.max(v.w,v.h));c.scale(k,k);sym(c,t)}
+  it.className='item';it.draggable=true;it.tabIndex=0;it.append(cv,v.n);
+  it.ondragstart=e=>e.dataTransfer.setData('text/plain',t);
+  const put=(x,y)=>{push();sel=add(t,snap(x),snap(y));selW=null;setTool('select');sync();render()};
+  it.onclick=()=>{const w=$('#wrap');put(w.scrollLeft+w.clientWidth/2,w.scrollTop+w.clientHeight/2)};
+  it.onkeydown=e=>{if(e.key=='Enter')it.onclick()};
+  it.dataset.t2=t;d.querySelector('.grid').appendChild(it)});
+ $('#cats').appendChild(d)});
+$('#wrap').addEventListener('dragover',e=>e.preventDefault());
+$('#wrap').addEventListener('drop',e=>{e.preventDefault();const t=e.dataTransfer.getData('text/plain');if(!LIB[t])return;const p=pos(e);push();sel=add(t,snap(p.x),snap(p.y));selW=null;setTool('select');sync();render()});
+
+/* ---------- acciones ---------- */
+$('#bNew').onclick=$('#bClear').onclick=function(){if(!objs.length||confirm('¿Borrar todo el plano? Puedes recuperarlo con Deshacer.')){push();objs=[];wires=[];sel=selW=wFrom=null;sync();render()}};
+$('#bUndo').onclick=undo;
+window.addEventListener('keydown',e=>{const tag=document.activeElement.tagName;
+ if((e.ctrlKey||e.metaKey)&&e.key=='z'&&tag!='INPUT'){e.preventDefault();undo()}
+ else if((e.key=='Delete'||e.key=='Backspace')&&tag!='INPUT'){if(sel){push();remove(sel)}else if(selW){push();wires=wires.filter(w=>w!=selW);selW=null}sync();render()}
+ else if(e.key=='Escape'){wFrom=null;sel=selW=null;setTool('select');sync()}});
+function crop(){if(!objs.length){alert('El plano está vacío. Agrega elementos antes de exportar.');return null}
+ let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9;objs.forEach(o=>{const b=bnd(o),k=sc(o);[[b[0],b[1]],[b[2],b[1]],[b[0],b[3]],[b[2],b[3]]].forEach(([a,c])=>{const q=toW(o,a*k,c*k);x0=Math.min(x0,q.x);y0=Math.min(y0,q.y);x1=Math.max(x1,q.x);y1=Math.max(y1,q.y)});
+  if(o.label&&!LIB[o.t].txt){x0=Math.min(x0,o.x-50);x1=Math.max(x1,o.x+50);y1=Math.max(y1,o.y+Math.max(b[2],b[3])*k+22)}});
+ x0=Math.max(0,x0-50);y0=Math.max(0,y0-50);x1=Math.min(W,x1+50);y1=Math.min(H,y1+50);
+ const s=sel,sw=selW;sel=selW=null;render(true);const t=document.createElement('canvas');t.width=x1-x0;t.height=y1-y0;
+ t.getContext('2d').drawImage(C,x0,y0,t.width,t.height,0,0,t.width,t.height);sel=s;selW=sw;render();return t}
+function dl(url,name){const a=document.createElement('a');a.href=url;a.download=name;a.click()}
+$('#bPng').onclick=()=>{const t=crop();if(t)dl(t.toDataURL('image/png'),'plano.png')};
+$('#bJpg').onclick=()=>{const t=crop();if(t)dl(t.toDataURL('image/jpeg',.93),'plano.jpg')};
+$('#bPdf').onclick=()=>{const t=crop();if(!t)return;if(!window.jspdf){alert('No se pudo cargar jsPDF. Revisa tu conexión a internet.');return}
+ const m=30,w=t.width+m*2,h=t.height+m*2+24,pdf=new window.jspdf.jsPDF({orientation:w>h?'l':'p',unit:'px',format:[w,h],compress:true});
+ pdf.setFontSize(12);pdf.setTextColor(27,34,51);pdf.text('Plano eléctrico — '+new Date().toLocaleDateString('es'),m,m);
+ pdf.addImage(t.toDataURL('image/png'),'PNG',m,m+14,t.width,t.height);pdf.save('plano.pdf')};
+setTool('select');sync();
+</script>
+</body>
+</html>
